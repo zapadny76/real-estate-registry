@@ -129,11 +129,56 @@ class MainWindow(QMainWindow):
         self.houses_tab = QWidget()
         self.premises_tab = QWidget()
         self.owners_tab = QWidget()
+        self.vtb_tab = QWidget()  # Вкладка для ВТБ
 
         # Создаем layouts для вкладок
         houses_layout = QVBoxLayout(self.houses_tab)
         premises_layout = QVBoxLayout(self.premises_tab)
         owners_layout = QVBoxLayout(self.owners_tab)
+        vtb_layout = QVBoxLayout(self.vtb_tab)  # Layout для вкладки ВТБ
+
+        # Создаем элементы для вкладки ВТБ
+        vtb_buttons_layout = QHBoxLayout()
+
+        # Кнопки для работы с регистрами ВТБ
+        import_vtb_button = QPushButton("Импорт из ВТБ")
+        export_vtb_button = QPushButton("Экспорт в ВТБ")
+        check_vtb_button = QPushButton("Проверка данных")
+
+        # Стиль для кнопок ВТБ
+        vtb_button_style = """
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                padding: 8px 16px;
+                border: none;
+                border-radius: 4px;
+                font-size: 14px;
+                min-width: 150px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+        """
+
+        # Применяем стиль к кнопкам ВТБ
+        import_vtb_button.setStyleSheet(vtb_button_style)
+        export_vtb_button.setStyleSheet(vtb_button_style)
+        check_vtb_button.setStyleSheet(vtb_button_style)
+
+        # Подключаем сигналы для кнопок ВТБ
+        import_vtb_button.clicked.connect(self.import_vtb_data)
+        export_vtb_button.clicked.connect(self.export_vtb_data)
+        check_vtb_button.clicked.connect(self.check_vtb_data)
+
+        # Добавляем кнопки ВТБ в layout
+        vtb_buttons_layout.addWidget(import_vtb_button)
+        vtb_buttons_layout.addWidget(export_vtb_button)
+        vtb_buttons_layout.addWidget(check_vtb_button)
+        vtb_buttons_layout.addStretch()
 
         # Создаем таблицы
         self.houses_table = QTableWidget()
@@ -152,15 +197,27 @@ class MainWindow(QMainWindow):
             ["ID", "First Name", "Last Name", "Document", "Share", "Status"])
         self.owners_table.horizontalHeader().setStretchLastSection(True)
 
+        # Создаем таблицу ВТБ
+        self.vtb_table = QTableWidget()
+        self.vtb_table.setColumnCount(7)
+        self.vtb_table.setHorizontalHeaderLabels([
+            "ID", "Номер счета", "ФИО владельца",
+            "Дата операции", "Тип операции", "Сумма", "Статус"
+        ])
+        self.vtb_table.horizontalHeader().setStretchLastSection(True)
+
         # Добавляем таблицы на вкладки
         houses_layout.addWidget(self.houses_table)
         premises_layout.addWidget(self.premises_table)
         owners_layout.addWidget(self.owners_table)
+        vtb_layout.addLayout(vtb_buttons_layout)
+        vtb_layout.addWidget(self.vtb_table)
 
         # Добавляем вкладки в виджет вкладок
         self.tab_widget.addTab(self.houses_tab, "Houses")
         self.tab_widget.addTab(self.premises_tab, "Premises")
         self.tab_widget.addTab(self.owners_tab, "Owners")
+        self.tab_widget.addTab(self.vtb_tab, "Регистры ВТБ")
 
         # Стилизуем вкладки
         tab_style = """
@@ -221,6 +278,131 @@ class MainWindow(QMainWindow):
 
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Import failed: {str(e)}")
+
+    def import_vtb_data(self):
+        try:
+            file_name, _ = QFileDialog.getOpenFileName(
+                self,
+                "Выберите файл регистра ВТБ",
+                "",
+                "Excel Files (*.xlsx *.xls);;CSV Files (*.csv)"
+            )
+
+            if file_name:
+                if file_name.endswith(('.xlsx', '.xls')):
+                    df = pd.read_excel(file_name)
+                else:
+                    df = pd.read_csv(file_name, encoding='utf-8')
+
+                # Очищаем существующие данные
+                self.vtb_table.setRowCount(0)
+
+                # Заполняем таблицу данными
+                for index, row in df.iterrows():
+                    self.vtb_table.insertRow(index)
+                    for col, value in enumerate(row):
+                        self.vtb_table.setItem(
+                            index, col, QTableWidgetItem(str(value))
+                        )
+
+                QMessageBox.information(
+                    self,
+                    "Успех",
+                    "Данные из регистра ВТБ успешно импортированы"
+                )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Ошибка при импорте данных ВТБ: {str(e)}"
+            )
+
+    def export_vtb_data(self):
+        try:
+            file_name, _ = QFileDialog.getSaveFileName(
+                self,
+                "Сохранить регистр ВТБ",
+                "",
+                "Excel Files (*.xlsx);;CSV Files (*.csv)"
+            )
+
+            if file_name:
+                # Собираем данные из таблицы
+                data = []
+                for row in range(self.vtb_table.rowCount()):
+                    row_data = []
+                    for col in range(self.vtb_table.columnCount()):
+                        item = self.vtb_table.item(row, col)
+                        row_data.append(item.text() if item else "")
+                    data.append(row_data)
+
+                # Создаем DataFrame
+                df = pd.DataFrame(
+                    data,
+                    columns=[
+                        "ID", "Номер счета", "ФИО владельца",
+                        "Дата операции", "Тип операции", "Сумма", "Статус"
+                    ]
+                )
+
+                # Сохраняем файл
+                if file_name.endswith('.xlsx'):
+                    df.to_excel(file_name, index=False)
+                else:
+                    df.to_csv(file_name, index=False, encoding='utf-8')
+
+                QMessageBox.information(
+                    self,
+                    "Успех",
+                    "Данные успешно экспортированы"
+                )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Ошибка при экспорте данных: {str(e)}"
+            )
+
+    def check_vtb_data(self):
+        try:
+            # Проверка данных
+            errors = []
+            for row in range(self.vtb_table.rowCount()):
+                # Проверка номера счета
+                account = self.vtb_table.item(row, 1)
+                if account and not account.text().isdigit():
+                    errors.append(f"Строка {row + 1}: Неверный формат номера счета")
+
+                # Проверка суммы
+                amount = self.vtb_table.item(row, 5)
+                if amount:
+                    try:
+                        float(amount.text().replace(',', '.'))
+                    except ValueError:
+                        errors.append(f"Строка {row + 1}: Неверный формат суммы")
+
+            if errors:
+                error_text = "\n".join(errors)
+                QMessageBox.warning(
+                    self,
+                    "Результаты проверки",
+                    f"Найдены ошибки в данных:\n{error_text}"
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "Результаты проверки",
+                    "Ошибок в данных не обнаружено"
+                )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Ошибка при проверке данных: {str(e)}"
+            )
 
     def add_house(self):
         # Реализация добавления дома
